@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>吃吃的看向我的錢包</title>
+    <style>
+        /* --- 視覺風格定義 (深藍與白) --- */
+        :root {
+            --primary-color: #1A365D; 
+            --primary-light: #2B6CB0;
+            --bg-color: #FFFFFF;      
+            --surface-color: #F7FAFC; 
+            --text-main: #2D3748;
+            --danger-color: #E53E3E;  
+            --border-color: #E2E8F0;
+            
+            /* 餐期專屬顏色 */
+            --color-breakfast: #D69E2E; 
+            --color-lunch: #3182CE;     
+            --color-dinner: #1A365D;    
+            --color-other: #A0AEC0;     
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            overflow-x: hidden; 
+        }
+
+        .container {
+            /* ★ 這裡將版面最大寬度從 900px 加寬到 1200px */
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            text-align: center;
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 10px;
+        }
+
+        /* --- 儀表板 --- */
+        .dashboard {
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .budget-inputs {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .budget-inputs input {
+            padding: 8px;
+            border: 1px solid var(--primary-color);
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        .budget-stats {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #EDF2F7;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: var(--primary-color);
+            width: 0%;
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+
+        .over-budget { color: var(--danger-color) !important; }
+        .over-budget-fill { background-color: var(--danger-color) !important; }
+
+        /* --- 行事曆 --- */
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            color: var(--primary-color);
+        }
+        
+        .calendar-header button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .calendar-grid {
+            display: grid;
+            /* ★ 強制平分 7 等分，解決格子被過長文字撐寬的問題 */
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 5px;
+        }
+
+        .day-name {
+            text-align: center;
+            font-weight: bold;
+            color: var(--primary-light);
+            padding: 10px 0;
+        }
+
+        .day-cell {
+            border: 1px solid var(--border-color);
+            min-height: 100px;
+            border-radius: 4px;
+            padding: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            background-color: white;
+            /* ★ 防止子元素的寬度撐破外層格子 */
+            min-width: 0;
+        }
+
+        .day-cell:hover {
+            background-color: var(--surface-color);
+        }
+
+        .past-day {
+            background-color: #EDF2F7; 
+            color: #A0AEC0;            
+            border-color: #E2E8F0;
+        }
+        .past-day .day-number {
+            color: #A0AEC0;
+        }
+        .past-day:hover {
+            background-color: #E2E8F0;
+        }
+
+        .day-number {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: var(--text-main);
+        }
+
+        /* 行程卡片 */
+        .event-card {
+            color: white;
+            font-size: 0.85em; /* 稍微放大一點點字體讓數字更清晰 */
+            padding: 4px 6px;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .past-day .event-card {
+            opacity: 0.6;
+        }
+
+        /* 餐期顏色類別 */
+        .meal-breakfast { background-color: var(--color-breakfast); }
+        .meal-lunch { background-color: var(--color-lunch); }
+        .meal-dinner { background-color: var(--color-dinner); }
+        .meal-other { background-color: var(--color-other); }
+
+        /* --- 動態食物雨動畫設定 --- */
+        @keyframes fall {
+            0% { transform: translateY(-50px) rotate(0deg); opacity: 1; }
+            80% { opacity: 1; }
+            100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+        }
+        .falling-emoji {
+            position: fixed;
+            top: -50px;
+            z-index: 9999;
+            pointer-events: none; 
+            animation: fall 3s linear forwards;
+        }
+
+        /* --- 彈出視窗 (Modal) --- */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            width: 350px;
+            border: 2px solid var(--primary-color);
+        }
+
+        .modal-content h3 {
+            margin-top: 0;
+            color: var(--primary-color);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group.checkbox-group {
+            flex-direction: row;
+            align-items: center;
+        }
+
+        .form-group label {
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .form-group input[type="text"], 
+        .form-group input[type="number"],
+        .form-group select {
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-family: inherit;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .btn-primary { background-color: var(--primary-color); color: white; }
+        .btn-cancel { background-color: #CBD5E0; color: var(--text-main); }
+        .btn-danger { background-color: var(--danger-color); color: white; display: none;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🗓️ 吃吃的看向我的錢包</h1>
+
+    <!-- 儀表板 -->
+    <div class="dashboard">
+        <div class="budget-inputs">
+            <div>
+                <label for="monthly-budget">設定本月預算：$</label>
+                <input type="number" id="monthly-budget" value="5000" onchange="saveBudget()">
+            </div>
+            <div id="status-message" style="color: var(--primary-light); font-weight: bold;">目前預算安全</div>
+        </div>
+        <div class="budget-stats">
+            <span id="planned-total">已規劃：$0</span>
+            <span id="remaining-budget">剩餘可用：$5000</span>
+        </div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+        </div>
+    </div>
+
+    <!-- 行事曆區塊 -->
+    <div class="calendar-header">
+        <button onclick="changeMonth(-1)">&#8592; 上個月</button>
+        <h2 id="current-month-display"></h2>
+        <button onclick="changeMonth(1)">下個月 &#8594;</button>
+    </div>
+    <div class="calendar-grid" id="calendar-grid">
+        <!-- 內容由 JS 產生 -->
+    </div>
+</div>
+
+<!-- 新增/編輯行程的 Modal -->
+<div class="modal" id="event-modal">
+    <div class="modal-content">
+        <h3 id="modal-title">規劃餐費</h3>
+        <input type="hidden" id="event-date">
+        <input type="hidden" id="event-id">
+        
+        <div class="form-group">
+            <label>餐期</label>
+            <select id="meal-time">
+                <option value="breakfast">早餐</option>
+                <option value="lunch" selected>午餐</option>
+                <option value="dinner">晚餐</option>
+                <option value="other">其他</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>餐廳名稱</label>
+            <input type="text" id="restaurant-name" placeholder="例如：屋馬燒肉" required>
+        </div>
+        <div class="form-group">
+            <label>想點什麼？</label>
+            <input type="text" id="order-items" placeholder="例如：雙人套餐" required>
+        </div>
+        <div class="form-group">
+            <label>預估金額 ($)</label>
+            <input type="number" id="estimated-cost" placeholder="1500" required>
+        </div>
+        <div class="form-group checkbox-group">
+            <input type="checkbox" id="is-alone" style="margin-right: 8px;">
+            <label for="is-alone" style="margin-bottom: 0;">自己去吃</label>
+        </div>
+
+        <div class="modal-actions">
+            <button class="btn btn-cancel" onclick="closeModal()">取消</button>
+            <button class="btn btn-danger" id="btn-delete" onclick="deleteEvent()">刪除行程</button>
+            <button class="btn btn-primary" onclick="saveEvent()">儲存規劃</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentDate = new Date();
+    let events = JSON.parse(localStorage.getItem('mealEvents')) || [];
+    let monthlyBudget = localStorage.getItem('monthlyBudget') || 5000;
+
+    const mealOrderWeight = { 'breakfast': 1, 'lunch': 2, 'dinner': 3, 'other': 4 };
+    
+    // ★ 這裡改為單一個字，節省空間
+    const mealNames = { 'breakfast': '早', 'lunch': '午', 'dinner': '晚', 'other': '其' };
+    
+    const modal = document.getElementById('event-modal');
+    document.getElementById('monthly-budget').value = monthlyBudget;
+
+    function init() {
+        renderCalendar();
+        updateDashboard();
+    }
+
+    function saveBudget() {
+        monthlyBudget = document.getElementById('monthly-budget').value;
+        localStorage.setItem('monthlyBudget', monthlyBudget);
+        updateDashboard();
+    }
+
+    function updateDashboard() {
+        const currentMonthEvents = events.filter(e => {
+            const date = new Date(e.date);
+            return date.getMonth() === currentDate.getMonth() && date.getFullYear() === currentDate.getFullYear();
+        });
+
+        let totalPlanned = 0;
+        currentMonthEvents.forEach(e => totalPlanned += Number(e.cost));
+        
+        const remaining = monthlyBudget - totalPlanned;
+        const percentage = (totalPlanned / monthlyBudget) * 100;
+
+        document.getElementById('planned-total').innerText = `已規劃：$${totalPlanned}`;
+        document.getElementById('remaining-budget').innerText = `剩餘可用：$${remaining}`;
+        
+        const fill = document.getElementById('progress-fill');
+        const statusMsg = document.getElementById('status-message');
+        const remainingEl = document.getElementById('remaining-budget');
+
+        fill.style.width = `${Math.min(percentage, 100)}%`;
+
+        if (totalPlanned > monthlyBudget) {
+            fill.classList.add('over-budget-fill');
+            remainingEl.classList.add('over-budget');
+            statusMsg.innerText = "⚠️ 警告：預算已超支，請考慮取消行程！";
+            statusMsg.classList.add('over-budget');
+        } else {
+            fill.classList.remove('over-budget-fill');
+            remainingEl.classList.remove('over-budget');
+            statusMsg.innerText = "目前預算安全";
+            statusMsg.classList.remove('over-budget');
+        }
+    }
+
+    function renderCalendar() {
+        const grid = document.getElementById('calendar-grid');
+        grid.innerHTML = ''; 
+        
+        const days = ['日', '一', '二', '三', '四', '五', '六'];
+        days.forEach(day => {
+            const div = document.createElement('div');
+            div.className = 'day-name';
+            div.innerText = day;
+            grid.appendChild(div);
+        });
+
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        document.getElementById('current-month-display').innerText = `${year} 年 ${month + 1} 月`;
+
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        for (let i = 0; i < firstDay; i++) {
+            const emptyDiv = document.createElement('div');
+            emptyDiv.className = 'day-cell';
+            emptyDiv.style.backgroundColor = 'transparent';
+            emptyDiv.style.border = 'none';
+            grid.appendChild(emptyDiv);
+        }
+
+        for (let i = 1; i <= daysInMonth; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'day-cell';
+            const cellDateStr = `${year}-${String(month+1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+            
+            const currentCellDate = new Date(year, month, i);
+            if (currentCellDate < today) {
+                cell.classList.add('past-day');
+            }
+
+            cell.innerHTML = `<div class="day-number">${i}</div>`;
+            cell.onclick = () => openModal(cellDateStr);
+
+            let dayEvents = events.filter(e => e.date === cellDateStr);
+            
+            dayEvents.sort((a, b) => {
+                const weightA = mealOrderWeight[a.mealTime] || 4; 
+                const weightB = mealOrderWeight[b.mealTime] || 4;
+                return weightA - weightB;
+            });
+
+            dayEvents.forEach(e => {
+                const card = document.createElement('div');
+                const mealClass = e.mealTime ? `meal-${e.mealTime}` : 'meal-other';
+                card.className = `event-card ${mealClass}`;
+                
+                const aloneIcon = e.isAlone ? '👤' : '🍽️';
+                // ★ 這裡拿掉中括號，只顯示「早」、「午」等單一文字加上一個空格
+                const mealPrefix = e.mealTime ? `${mealNames[e.mealTime]} ` : '';
+                card.innerText = `${aloneIcon} ${mealPrefix}${e.restaurant} $${e.cost}`;
+                
+                card.onclick = (event) => {
+                    event.stopPropagation(); 
+                    openModal(cellDateStr, e.id);
+                };
+                cell.appendChild(card);
+            });
+
+            grid.appendChild(cell);
+        }
+    }
+
+    function changeMonth(delta) {
+        currentDate.setMonth(currentDate.getMonth() + delta);
+        renderCalendar();
+        updateDashboard();
+    }
+
+    function openModal(dateStr, eventId = null) {
+        document.getElementById('event-date').value = dateStr;
+        document.getElementById('modal-title').innerText = `${dateStr} 餐費規劃`;
+        
+        if (eventId) {
+            const ev = events.find(e => e.id === eventId);
+            document.getElementById('event-id').value = ev.id;
+            document.getElementById('meal-time').value = ev.mealTime || 'lunch'; 
+            document.getElementById('restaurant-name').value = ev.restaurant;
+            document.getElementById('order-items').value = ev.items;
+            document.getElementById('estimated-cost').value = ev.cost;
+            document.getElementById('is-alone').checked = ev.isAlone;
+            document.getElementById('btn-delete').style.display = 'block';
+        } else {
+            document.getElementById('event-id').value = '';
+            document.getElementById('meal-time').value = 'lunch'; 
+            document.getElementById('restaurant-name').value = '';
+            document.getElementById('order-items').value = '';
+            document.getElementById('estimated-cost').value = '';
+            document.getElementById('is-alone').checked = false;
+            document.getElementById('btn-delete').style.display = 'none';
+        }
+        modal.style.display = 'flex';
+    }
+
+    function closeModal() {
+        modal.style.display = 'none';
+    }
+
+    function triggerFoodRain() {
+        const foods = ['🍔', '🍕', '🍣', '🥗', '🍰', '☕', '🍱', '🌮', '🍩', '🍟', '🍜', '🍦', '🥩'];
+        const numFoods = 25; 
+        
+        for (let i = 0; i < numFoods; i++) {
+            const emojiNode = document.createElement('div');
+            emojiNode.className = 'falling-emoji';
+            emojiNode.innerText = foods[Math.floor(Math.random() * foods.length)];
+            
+            emojiNode.style.left = (Math.random() * 95) + 'vw';
+            emojiNode.style.fontSize = (Math.random() * 20 + 15) + 'px'; 
+            emojiNode.style.animationDuration = (Math.random() * 2 + 2) + 's'; 
+            
+            document.body.appendChild(emojiNode);
+            
+            setTimeout(() => {
+                emojiNode.remove();
+            }, 4000);
+        }
+    }
+
+    function saveEvent() {
+        const dateStr = document.getElementById('event-date').value;
+        const id = document.getElementById('event-id').value;
+        const mealTime = document.getElementById('meal-time').value;
+        const restaurant = document.getElementById('restaurant-name').value;
+        const items = document.getElementById('order-items').value;
+        const cost = document.getElementById('estimated-cost').value;
+        const isAlone = document.getElementById('is-alone').checked;
+
+        if (!restaurant || !cost) {
+            alert('請填寫餐廳名稱與預估金額！');
+            return;
+        }
+
+        const isNewEvent = !id; 
+
+        if (!isNewEvent) {
+            const index = events.findIndex(e => e.id === id);
+            events[index] = { id, date: dateStr, mealTime, restaurant, items, cost, isAlone };
+        } else {
+            events.push({
+                id: Date.now().toString(),
+                date: dateStr,
+                mealTime,
+                restaurant,
+                items,
+                cost,
+                isAlone
+            });
+        }
+
+        localStorage.setItem('mealEvents', JSON.stringify(events));
+        closeModal();
+        renderCalendar();
+        updateDashboard();
+
+        if (isNewEvent) {
+            triggerFoodRain();
+        }
+    }
+
+    function deleteEvent() {
+        const id = document.getElementById('event-id').value;
+        if(confirm('確定要取消這個聚餐規劃嗎？（可以省下一筆錢喔！）')) {
+            events = events.filter(e => e.id !== id);
+            localStorage.setItem('mealEvents', JSON.stringify(events));
+            closeModal();
+            renderCalendar();
+            updateDashboard();
+        }
+    }
+
+    init();
+</script>
+
+</body>
+</html>
